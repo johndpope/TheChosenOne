@@ -1,4 +1,4 @@
-import torch
+import scipy as sp
 from diffusers import StableDiffusionPipeline, DiffusionSchedulerType
 import numpy as np
 
@@ -22,32 +22,32 @@ def consistent_character_generation(target_prompt, hyper_parameters, model_name)
 
     # Load the specified model.
     models = {
-        "stable-diffusion-v1-4": StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4"),
-        "openai-whisper-14b": torch.hub.load('openai', 'whisper', 'https://github.com/openai/whisper/raw/main/checkpoints/whisper_14b.pt')
+        "stable-diffusion-v1-4": StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4")
     }
 
     pipe = models[model_name]
 
-    # Generate samples from the specified model.
-    samples = pipe(target_prompt, num_images=hyper_parameters['number_of_generated_images_per_step'], scheduler_type=DiffusionSchedulerType.PNDM)
+    for iteration in range(hyper_parameters['maximum_number_of_iterations']):
+        # Generate samples from the specified model.
+        samples = pipe(target_prompt, num_images=hyper_parameters['number_of_generated_images_per_step'], scheduler_type=DiffusionSchedulerType.PNDM)
 
-    # Extract features from the samples.
-    if model_name == "stable-diffusion-v1-4":
-        features = samples["sample_features"]
+        # Extract features from the samples.
+        if model_name == "stable-diffusion-v1-4":
+            features = samples["sample_features"]
 
 
-    # Cluster the features.
-    C = sp.kmeans(features, hyper_parameters['target_cluster_size'])
+        # Cluster the features.
+        C = sp.kmeans(features, hyper_parameters['target_cluster_size'])
 
-    # Remove small clusters.
-    C = C.filter(lambda c: len(c) >= hyper_parameters['minimum_cluster_size'])
+        # Remove small clusters.
+        C = C.filter(lambda c: len(c) >= hyper_parameters['minimum_cluster_size'])
 
-    # Find the most cohesive cluster.
-    Ccohesive = min(C, key=lambda c: np.linalg.norm(c.centroid - np.mean(c, axis=0)))
+        # Find the most cohesive cluster.
+        Ccohesive = min(C, key=lambda c: np.linalg.norm(c.centroid - np.mean(c, axis=0)))
 
-    # Check the convergence criterion.
-    if sp.Abs(Ccohesive.centroid[0] - Ccohesive.centroid[1]) < hyper_parameters['convergence_criterion']:
-        break
+        # Check the convergence criterion.
+        if sp.Abs(Ccohesive.centroid[0] - Ccohesive.centroid[1]) < hyper_parameters['convergence_criterion']:
+            break
 
     return Ccohesive
 
@@ -64,4 +64,4 @@ if __name__ == "__main__":
     # Call the consistent_character_generation() function with the specified target prompt, hyper-parameters, and model name.
     cohesive_representation = consistent_character_generation("A photo of a 50 years old man with curly hair", hyper_parameters, "stable-diffusion-v1-4")
     print(cohesive_representation)
-/
+
