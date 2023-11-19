@@ -44,7 +44,13 @@ def consistent_character_generation(target_prompt, hyper_parameters, model_name)
     }
 
     pipe = models[model_name]
-    scheduler  = PNDMScheduler(model_key, subfolder="scheduler")
+
+    scheduler  =  PNDMScheduler(
+            beta_start=0.00085,
+            beta_end=0.012,
+            beta_schedule="scaled_linear",
+            skip_prk_steps = True)
+
     for iteration in range(hyper_parameters['maximum_number_of_iterations']):
         # Generate samples from the specified model.
 
