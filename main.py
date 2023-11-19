@@ -1,6 +1,8 @@
 import scipy as sp
-from diffusers import StableDiffusionPipeline, DiffusionSchedulerType
+from diffusers import StableDiffusionPipeline, PNDMScheduler
 import numpy as np
+
+# from diffusers import AutoencoderKL, UNet2DConditionModel, , DDIMScheduler
 
 def consistent_character_generation(target_prompt, hyper_parameters, model_name):
     """
@@ -20,16 +22,19 @@ def consistent_character_generation(target_prompt, hyper_parameters, model_name)
         A consistent representation of the target prompt.
     """
 
+    model_key = "CompVis/stable-diffusion-v1-4"
     # Load the specified model.
     models = {
-        "stable-diffusion-v1-4": StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4")
+        "stable-diffusion-v1-4": StableDiffusionPipeline.from_pretrained(model_key)
     }
 
     pipe = models[model_name]
-
+    scheduler  = PNDMScheduler(model_key, subfolder="scheduler")
     for iteration in range(hyper_parameters['maximum_number_of_iterations']):
         # Generate samples from the specified model.
-        samples = pipe(target_prompt, num_images=hyper_parameters['number_of_generated_images_per_step'], scheduler_type=DiffusionSchedulerType.PNDM)
+
+
+        samples = pipe(target_prompt, num_images=hyper_parameters['number_of_generated_images_per_step'], scheduler_type=scheduler)
 
         # Extract features from the samples.
         if model_name == "stable-diffusion-v1-4":
