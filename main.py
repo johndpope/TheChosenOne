@@ -1,8 +1,23 @@
 import scipy as sp
 from diffusers import StableDiffusionPipeline, PNDMScheduler
 import numpy as np
+import torch
 
-# from diffusers import AutoencoderKL, UNet2DConditionModel, , DDIMScheduler
+
+def load_model(model_name):
+    """
+    Loads the specified model and returns the model pipeline.
+    Args:
+        model_name: The name of the model to use.
+    Returns:
+        The model pipeline.
+    """
+    models = {
+        "stable-diffusion-v1-4": StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4"),
+        "openai-whisper-14b": torch.hub.load('openai', 'whisper', 'https://github.com/openai/whisper/raw/main/checkpoints/whisper_14b.pt')
+    }
+    return models.get(model_name, None)
+
 
 def consistent_character_generation(target_prompt, hyper_parameters, model_name):
     """
@@ -56,7 +71,33 @@ def consistent_character_generation(target_prompt, hyper_parameters, model_name)
 
     return Ccohesive
 
+def extract_features(image_path, model):
+    # Load the image. This will depend on how your model expects the input.
+    image = load_image(image_path)
+
+    # Process the image through the model to get features.
+    # This is a simplified example; the actual method depends on your model's API.
+    features = model(image)
+
+    return features
+
+def load_image(image_path):
+    # Load the image from the path.
+    # Implement this according to your model's input requirements.
+    pass
+
+
+
+def compare_features(image_features, cluster_centroid):
+    # Calculate the Euclidean distance between the two feature vectors
+    distance = np.linalg.norm(image_features - cluster_centroid)
+
+    return distance
+
+
 if __name__ == "__main__":
+
+    
     # Set the hyper-parameters.
     hyper_parameters = {
         "number_of_generated_images_per_step": 10,
@@ -70,3 +111,16 @@ if __name__ == "__main__":
     cohesive_representation = consistent_character_generation("A photo of a 50 years old man with curly hair", hyper_parameters, "stable-diffusion-v1-4")
     print(cohesive_representation)
 
+    def evaluate_cohesiveness(new_image_path, model, cohesive_cluster):
+        # Load and process the new image to extract features
+        new_image_features = extract_features(new_image_path, model)
+
+        # Compare the new image's features to the cohesive cluster's centroid
+        cohesiveness_score = compare_features(new_image_features, cohesive_cluster.centroid)
+
+        return cohesiveness_score
+
+    # Usage
+    pipe = load_model("stable-diffusion-v1-4")
+    new_image_cohesiveness = evaluate_cohesiveness("path_to_new_image.jpg", pipe, cohesive_representation)
+    print(f"Cohesiveness score: {new_image_cohesiveness}")
