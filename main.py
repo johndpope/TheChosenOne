@@ -2,7 +2,14 @@ import scipy as sp
 from diffusers import StableDiffusionPipeline, PNDMScheduler
 import numpy as np
 import torch
+from transformers import CLIPFeatureExtractor, CLIPModel
+from PIL import Image
+import torchvision.transforms as transforms
 
+
+
+feature_extractor = CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32")
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
 
 def load_model(model_name):
     """
@@ -54,12 +61,19 @@ def consistent_character_generation(target_prompt, hyper_parameters, model_name)
     for iteration in range(hyper_parameters['maximum_number_of_iterations']):
         # Generate samples from the specified model.
 
+        result = pipe(target_prompt, num_images=hyper_parameters['number_of_generated_images_per_step'])
 
-        samples = pipe(target_prompt, num_images=hyper_parameters['number_of_generated_images_per_step'], scheduler_type=scheduler)
+        processed_images = result.images
+        # Convert generated images to the format expected by CLIPFeatureExtractor
+        # This may involve converting tensors to PIL images or similar, depending on your pipeline's output
+        # processed_images = [convert_to_clip_format(image) for image in images]
 
+        # Use CLIPFeatureExtractor to extract features
+        inputs = feature_extractor(images=processed_images, return_tensors="pt")
+        features = model.get_image_features(**inputs)
         # Extract features from the samples.
-        if model_name == "stable-diffusion-v1-4":
-            features = samples["sample_features"]
+        # if model_name == "stable-diffusion-v1-4":
+        #     features = samples["sample_features"]
 
 
         # Cluster the features.
