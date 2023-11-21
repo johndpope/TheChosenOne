@@ -5,8 +5,8 @@ import torch
 from transformers import CLIPFeatureExtractor, CLIPModel
 from PIL import Image
 import torchvision.transforms as transforms
-
-
+from sklearn.cluster import KMeans
+from sklearn.metrics.pairwise import euclidean_distances
 
 feature_extractor = CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32")
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -52,44 +52,50 @@ def consistent_character_generation(target_prompt, hyper_parameters, model_name)
 
     pipe = models[model_name]
 
-    scheduler  =  PNDMScheduler(
-            beta_start=0.00085,
-            beta_end=0.012,
-            beta_schedule="scaled_linear",
-            skip_prk_steps = True)
+    # scheduler  =  PNDMScheduler(
+    #         beta_start=0.00085,
+    #         beta_end=0.012,
+    #         beta_schedule="scaled_linear",
+    #         skip_prk_steps = True)
+    previous_centroid = None
+    most_cohesive_cluster_info = None
 
     for iteration in range(hyper_parameters['maximum_number_of_iterations']):
-        # Generate samples from the specified model.
-
         result = pipe(target_prompt, num_images=hyper_parameters['number_of_generated_images_per_step'])
-
-        processed_images = result.images
-        # Convert generated images to the format expected by CLIPFeatureExtractor
-        # This may involve converting tensors to PIL images or similar, depending on your pipeline's output
-        # processed_images = [convert_to_clip_format(image) for image in images]
-
-        # Use CLIPFeatureExtractor to extract features
-        inputs = feature_extractor(images=processed_images, return_tensors="pt")
+        inputs = feature_extractor(images=result.images, return_tensors="pt")
         features = model.get_image_features(**inputs)
-        # Extract features from the samples.
-        # if model_name == "stable-diffusion-v1-4":
-        #     features = samples["sample_features"]
+        if isinstance(features, torch.Tensor):
+            features_np = features.detach().cpu().numpy()
+        else:
+            features_np = features
 
+        # Use KMeans for clustering
+        kmeans = KMeans(n_clusters=hyper_parameters['target_cluster_size'])
+        kmeans.fit(features_np)
 
-        # Cluster the features.
-        C = sp.kmeans(features, hyper_parameters['target_cluster_size'])
+        # Calculate the average distance of points to their cluster center
+        cluster_distances = euclidean_distances(features_np, kmeans.cluster_centers_)
+        avg_distances = np.array([cluster_distances[kmeans.labels_ == i].mean() for i in range(kmeans.n_clusters)])
 
-        # Remove small clusters.
-        C = C.filter(lambda c: len(c) >= hyper_parameters['minimum_cluster_size'])
+        # Find the index of the most cohesive cluster
+        most_cohesive_index = np.argmin(avg_distances)
+        most_cohesive_centroid = kmeans.cluster_centers_[most_cohesive_index]
 
-        # Find the most cohesive cluster.
-        Ccohesive = min(C, key=lambda c: np.linalg.norm(c.centroid - np.mean(c, axis=0)))
+        # Check the convergence criterion
+        if previous_centroid is not None:
+            centroid_diff = np.linalg.norm(most_cohesive_centroid - previous_centroid)
+            if centroid_diff < hyper_parameters['convergence_criterion']:
+                break
 
-        # Check the convergence criterion.
-        if sp.Abs(Ccohesive.centroid[0] - Ccohesive.centroid[1]) < hyper_parameters['convergence_criterion']:
-            break
-
-    return Ccohesive
+        previous_centroid = most_cohesive_centroid
+        # Update the most cohesive cluster info
+        most_cohesive_cluster_info = {
+            'centroid': most_cohesive_centroid,
+            'labels': kmeans.labels_,
+            'cohesive_cluster_label': most_cohesive_index
+        }
+    
+    return most_cohesive_cluster_info 
 
 def extract_features(image_path, model):
     # Load the image. This will depend on how your model expects the input.
